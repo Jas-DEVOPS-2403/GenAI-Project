@@ -10,23 +10,26 @@ def _get_coach():
     return _coach
 
 
-def vlm_auditor(image_path: str, exercise_type: str, fault_type: str = "stuck",
+def vlm_auditor(image_path: str, exercise_name: str, fault_type: str = "stuck",
                 phase: str = "down", angle: float = 100.0):
     """
     Agentic coach auditor.
     - image_path: saved snapshot (kept for logging / future VLM upgrade)
-    - exercise_type: e.g. "squat"
+    - exercise_name: active exercise, e.g. "squats", "push-ups", "high_knees"
     - fault_type: detected issue passed in from orchestrator
     - phase: current movement phase
-    - angle: current joint angle
-    Returns dict with 'feedback' key, matching the original mock interface.
+    - angle: current joint angle (0.0 for non-angle exercises)
+    Returns dict with 'feedback' key.
     """
-    print(f"[Auditor] Triggered — fault={fault_type} phase={phase} angle={int(angle)}")
+    print(f"[Auditor] Triggered — exercise={exercise_name} fault={fault_type} "
+          f"phase={phase} angle={int(angle)}")
 
     coach = _get_coach()
-    feedback = coach.get_feedback(fault_type=fault_type, phase=phase, angle=angle)
+    feedback = coach.get_feedback(
+        fault_type=fault_type,
+        exercise_name=exercise_name,
+        phase=phase,
+        angle=angle
+    )
 
-    if feedback is None:
-        feedback = ""  # suppressed by session memory
-
-    return {"feedback": feedback}
+    return {"feedback": feedback or ""}
