@@ -108,6 +108,12 @@ def main():
         print("ERROR: Cannot open webcam")
         return
 
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+
+    cv2.namedWindow("Agentic Fitness Coach", cv2.WINDOW_NORMAL)
+    cv2.resizeWindow("Agentic Fitness Coach", 1280, 720)
+
     audit_cooldown = 0
     AUDIT_COOLDOWN_FRAMES = 90  # ~3s between audit triggers
 
@@ -195,8 +201,10 @@ def main():
                 ).start()
 
             # ── VISUAL OVERLAYS ──────────────────────────────────────────────
-            # Header bar
-            cv2.rectangle(frame, (0, 0), (640, 45), (0, 0, 0), -1)
+            fh, fw, _ = frame.shape
+
+            # Header bar (dynamic width)
+            cv2.rectangle(frame, (0, 0), (fw, 45), (0, 0, 0), -1)
             cv2.putText(frame, "Q-T: Warmup | 1-P: Main | A-F: Cooldown | ESC: Quit",
                         (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
 
@@ -212,19 +220,34 @@ def main():
                 cv2.putText(frame, f"REPS: {state['reps']}", (20, 120),
                             cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 255), 2)
 
-            # Coach feedback (orange while processing, green when ready)
+            # Coach feedback — wrap at 45 chars across two lines
             coach_color = (0, 165, 255) if state["audit_in_progress"] else (0, 255, 0)
-            cv2.putText(frame, f"COACH: {state['vlm_feedback'][:50]}", (20, 160),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, coach_color, 2)
+            feedback = state["vlm_feedback"]
+            line1 = ("COACH: " + feedback)[:50]
+            line2 = ("COACH: " + feedback)[50:95] if len("COACH: " + feedback) > 50 else ""
+            cv2.putText(frame, line1, (20, 160), cv2.FONT_HERSHEY_SIMPLEX, 0.6, coach_color, 2)
+            if line2:
+                cv2.putText(frame, line2, (20, 190), cv2.FONT_HERSHEY_SIMPLEX, 0.6, coach_color, 2)
 
-            # Angle + joint dot for angle-based exercises
-            if logic_type == "angle" and "knee_coords" in data:
-                h, w, _ = frame.shape
-                cx = int(data["knee_coords"][0] * w)
-                cy = int(data["knee_coords"][1] * h)
-                cv2.putText(frame, str(int(data["angle"])), (cx + 10, cy - 10),
+            # Angle + joint dots (bilateral — one dot per visible side)
+            if logic_type == "angle" and "all_knee_coords" in data:
+                for coords in data["all_knee_coords"]:
+                    cx = int(coords[0] * fw)
+                    cy = int(coords[1] * fh)
+                    cv2.circle(frame, (cx, cy), 10, (0, 255, 0), -1)
+                # Angle label on first dot
+                cx0 = int(data["all_knee_coords"][0][0] * fw)
+                cy0 = int(data["all_knee_coords"][0][1] * fh)
+                cv2.putText(frame, str(int(data["angle"])), (cx0 + 10, cy0 - 10),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
-                cv2.circle(frame, (cx, cy), 10, (0, 255, 0), -1)
+
+            # Landmark dots for spatial/height exercises (cyan)
+            elif "landmark_coords" in data:
+                for coords in data["landmark_coords"]:
+                    if coords is not None:
+                        cx = int(coords[0] * fw)
+                        cy = int(coords[1] * fh)
+                        cv2.circle(frame, (cx, cy), 8, (0, 255, 255), -1)
 
         cv2.imshow("Agentic Fitness Coach", frame)
 
