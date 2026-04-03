@@ -10,7 +10,7 @@ import time
 import os
 from tracker import PoseTracker
 from update_coach_logic import update_coach_logic
-from auditor import vlm_auditor
+from auditor import vlm_auditor, _get_coach
 
 def trigger_vlm_audit(frame, state):
     """Saves visual evidence for the VLM specialist."""
@@ -27,13 +27,17 @@ def main():
     tracker = PoseTracker()
     # Updated state to hold the VLM's feedback
     state = {
-        "reps": 0, 
-        "phase": "up", 
-        "is_anomaly": False, 
+        "reps": 0,
+        "phase": "up",
+        "is_anomaly": False,
         "consecutive_stuck_frames": 0,
-        "vlm_feedback": "" 
+        "vlm_feedback": "",
+        "angle_buffer": [],
+        "min_angle_this_rep": 180.0
     }
     
+    _get_coach()  # pre-warm RAGCoach so first audit has no loading delay
+
     cap = cv2.VideoCapture(0)
 
     print("Agentic Tracker Running... Press 'q' to quit.")
@@ -57,10 +61,12 @@ def main():
                 snapshot_path = trigger_vlm_audit(frame, state)
 
                 # Classify fault type from angle so the RAG retrieval is targeted
-                if angle < 80:
+                if state["min_angle_this_rep"] > 95:
+                    fault_type = "shallow_depth"  # rep completed without hitting depth
+                elif angle < 80:
                     fault_type = "stuck"          # deep but can't drive up
                 elif angle < 110:
-                    fault_type = "shallow_depth"  # not hitting depth
+                    fault_type = "shallow_depth"  # fallback
                 else:
                     fault_type = "knee_valgus"    # up-phase issue
 
@@ -78,6 +84,8 @@ def main():
                 # Reset triggers to return to the Fast Loop
                 state["is_anomaly"] = False
                 state["consecutive_stuck_frames"] = 0
+                # min_angle_this_rep is NOT reset here — only resets on phase transition
+                # so repeated anomalies in the same rep keep correct fault classification
 
             # 3. ACTION: Visual Overlays
             h, w, _ = frame.shape
