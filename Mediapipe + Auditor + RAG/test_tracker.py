@@ -100,6 +100,7 @@ def main():
     tracker = PoseTracker()
     exercise_name = "squats"
     state = make_initial_state()
+    good_rep_counter = 0
 
     _get_coach()  # pre-warm RAGCoach so first audit fires immediately
 
@@ -140,6 +141,7 @@ def main():
                 elif any(x in exercise_name for x in ["high_knees", "butt", "quick", "kicks", "standing"]):
                     state["phase"] = "low"
                 audit_cooldown = 0
+                good_rep_counter = 0
                 print(f"[Switched] {exercise_name}")
 
         cfg = tracker.get_exercise_config(exercise_name)
@@ -152,11 +154,16 @@ def main():
 
         if data:
             # ── REASONING ───────────────────────────────────────────────────
+            prev_reps = state["reps"]
             state = update_coach_logic(
                 state, data, exercise_name,
                 threshold_down=thresholds["down"],
                 threshold_up=thresholds["up"],
             )
+
+            # Track clean reps for positive reinforcement
+            if state["reps"] > prev_reps:
+                good_rep_counter += 1
 
             if audit_cooldown > 0:
                 audit_cooldown -= 1
@@ -178,6 +185,25 @@ def main():
                               state["phase"], 0.0, state),
                         daemon=True,
                     ).start()
+
+            # ── GOOD-FORM GATE (every 5 clean reps) ─────────────────────────
+            elif (good_rep_counter > 0 and good_rep_counter % 5 == 0
+                  and not state["is_anomaly"]
+                  and not state["audit_in_progress"]
+                  and audit_cooldown == 0):
+                if not os.path.exists("audits"):
+                    os.makedirs("audits")
+                snapshot_path = f"audits/audit_{int(time.time())}.jpg"
+                cv2.imwrite(snapshot_path, frame)
+                state["audit_in_progress"] = True
+                audit_cooldown = AUDIT_COOLDOWN_FRAMES
+                good_rep_counter = 0  # reset so next trigger is 5 more reps later
+                threading.Thread(
+                    target=run_audit,
+                    args=(snapshot_path, exercise_name, "good_form",
+                          state["phase"], data.get("angle", 0.0), state),
+                    daemon=True,
+                ).start()
 
             # ── AGENTIC GATE ─────────────────────────────────────────────────
             elif state["is_anomaly"] and not state["audit_in_progress"] and audit_cooldown == 0:

@@ -41,9 +41,15 @@ KNOWLEDGE_BASE = [
 
     # ── PUSH-UPS / MOVING PLANK ─────────────────────────────────────────────
     "Push-up elbow flare: Keep elbows at 45 degrees to your torso, not flared wide.",
+    "Push-up elbows too wide: Tuck your elbows close to your sides, think narrow not wide.",
+    "Push-up elbow path: Elbows should travel back at 45 degrees, not out to the sides.",
     "Push-up sagging hips: Squeeze your abs and glutes — body should be one straight line.",
+    "Push-up hips dropping: Brace your core hard, your spine should stay flat like a plank.",
     "Push-up depth: Lower your chest until it nearly touches the floor every rep.",
+    "Push-up not deep enough: Bend your elbows fully, chest must graze the floor.",
     "Push-up stuck: Push the floor away explosively, think about spreading your hands apart.",
+    "Push-up stuck at bottom: Press hard through your palms, drive the floor away from you.",
+    "Push-up good rep: Strong press, keep that elbow path consistent every rep.",
     "Moving plank: Keep hips level as you walk your hands, do not rock side to side.",
     "Plank taps: Minimise hip rotation when lifting each hand for a tap.",
 
@@ -60,6 +66,8 @@ KNOWLEDGE_BASE = [
     "Jumping jacks low drive: Jump wider, push your feet apart with each rep.",
     "Air jump rope: Keep wrists turning in small circles, stay light on your feet.",
     "Air jump rope rhythm: Find a consistent bounce, do not stop between turns.",
+    "Air jump rope low drive: Bounce too low — drive each skip higher and reach for more height.",
+    "Standing kicks great form: Great kick — strong height every rep, keep that consistency going.",
 
     # ── SQUAT JUMPS / SQUAT KICKS ───────────────────────────────────────────
     "Squat jump depth: Hit parallel before you explode up, do not shallow-dip.",
@@ -73,15 +81,21 @@ KNOWLEDGE_BASE = [
     "Floor touches: Hinge at the hips to reach down, keep a flat back as you lower.",
     "Quick feet: Stay on the balls of your feet, keep your steps light and rapid.",
     "Quick feet posture: Stay low, slight squat position, keep your core braced.",
+    "Quick feet height: Drive each foot higher off the ground, aim for more lift with every step.",
+    "Plank tap reach: Extend your tapping hand fully away from your body, maximise range of motion.",
 
     # ── STANDING KICKS / BOXING SQUAT PUNCHES ──────────────────────────────
     "Standing kicks: Drive the kick from the hip, snap the leg back under control.",
     "Standing kicks balance: Squeeze your standing glute and fix your gaze on one point.",
     "Boxing squat punches: Full squat depth first, then punch with full arm extension.",
+    "Boxing squat punches stuck: Drive powerfully out of the squat before you throw the punch.",
+    "Puddle jumps good: Strong lateral jump — good rhythm, land softly and consistently each side.",
 
     # ── COOL-DOWN STRETCHES ─────────────────────────────────────────────────
     "Deltoid stretch: Pull your arm across your chest until you feel the shoulder stretch.",
+    "Deltoid stretch depth: Pull your arm deeper across your chest until you feel a full shoulder stretch.",
     "Quad stretch: Pull your heel to your glute, stand tall and squeeze the standing glute.",
+    "Quad stretch depth: Pull your heel deeper toward your glute for a full quadriceps stretch.",
     "Shoulder gators: Keep the movement slow and controlled, feel the full range.",
     "Toe touchers: Hinge from the hips with a soft knee bend, reach toward the floor.",
 
@@ -128,15 +142,15 @@ FAULT_QUERIES = {
         "good_form":     "positive reinforcement good morning hip hinge",
     },
     "push-ups": {
-        "elbow_flare":   "elbows flaring out push up tricep path correction",
-        "shallow_depth": "push up chest not reaching floor range of motion",
-        "sagging_hips":  "hips sagging push up core engagement plank position",
-        "stuck":         "stuck at bottom push up pressing strength correction",
-        "good_form":     "positive reinforcement push up full rep encouragement",
+        "elbow_flare":   "push up elbows flare wide 45 degrees tuck close torso",
+        "shallow_depth": "push up chest not reaching floor bend elbows deep",
+        "sagging_hips":  "push up hips dropping core brace flat spine plank",
+        "stuck":         "push up stuck at bottom press palms drive floor away",
+        "good_form":     "push up good rep strong press keep elbow path consistent",
     },
     "plank_taps": {
         "sagging_hips":  "hips sagging plank taps core engagement",
-        "shallow_depth": "plank tap not reaching full extension",
+        "shallow_depth": "plank tap full reach extend hand range of motion",
         "good_form":     "positive reinforcement plank taps strong core",
     },
     "moving_plank": {
@@ -162,7 +176,7 @@ FAULT_QUERIES = {
     },
     "air_jump_rope": {
         "timing":        "air jump rope rhythm lost coordination correction",
-        "low_drive":     "not bouncing enough air jump rope light feet",
+        "low_drive":     "air jump rope bounce too low drive higher reach height skip",
         "good_form":     "positive reinforcement air jump rope good rhythm",
     },
     "squat_jumps": {
@@ -187,30 +201,30 @@ FAULT_QUERIES = {
         "good_form":     "positive reinforcement floor touches good reach",
     },
     "quick_feet": {
-        "low_drive":     "feet not lifting quick feet stay light correction",
+        "low_drive":     "quick feet drive foot higher off ground more lift height",
         "good_form":     "positive reinforcement quick feet good cadence",
     },
     "standing_kicks": {
         "low_drive":     "kick not reaching high enough standing kick correction",
         "balance_loss":  "losing balance standing kick squeeze glute correction",
-        "good_form":     "positive reinforcement standing kick good height",
+        "good_form":     "standing kick great strong rep keep consistent good form",
     },
     "boxing_squat_punches": {
         "shallow_depth": "squat not deep enough boxing squat punches correction",
-        "stuck":         "stuck at bottom boxing squat punches correction",
+        "stuck":         "boxing squat stuck drive powerfully out of squat punch",
         "good_form":     "positive reinforcement boxing squat punches good rep",
     },
     "puddle_jumps": {
         "shallow_depth": "puddle jump not jumping far enough lateral distance",
         "landing":       "heavy landing puddle jump soft knees absorb",
-        "good_form":     "positive reinforcement puddle jump good lateral power",
+        "good_form":     "puddle jump good strong lateral rhythm land soft consistent",
     },
     "deltoid_stretch": {
-        "shallow_depth": "deltoid stretch not pulling arm far enough across",
+        "shallow_depth": "deltoid stretch pull deeper across chest full shoulder stretch depth",
         "good_form":     "positive reinforcement deltoid stretch good hold",
     },
     "quad_stretch": {
-        "shallow_depth": "quad stretch heel not reaching glute pull closer",
+        "shallow_depth": "quad stretch pull heel deeper toward glute full quadriceps stretch depth",
         "balance_loss":  "losing balance quad stretch squeeze standing glute",
         "good_form":     "positive reinforcement quad stretch good hold",
     },
@@ -305,7 +319,7 @@ class RAGCoach:
         )
 
         response = ollama.generate(model=self.llm_model, prompt=prompt)
-        feedback = response["response"].strip().split("\n")[0]
+        feedback = response["response"].strip().split("\n")[0].strip('"')
 
         self._update_memory(fault_type)
         return feedback
