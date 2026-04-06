@@ -32,4 +32,4 @@ def vlm_auditor(image_path: str, exercise_name: str, fault_type: str = "stuck",
         angle=angle
     )
 
-    return {"feedback": feedback or ""}
+    return {"feedback": feedback}  # None passes through so run_audit guard works

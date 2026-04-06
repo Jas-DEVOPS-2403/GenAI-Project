@@ -74,7 +74,7 @@ STRETCH_FAULT_ROTATION = ["shallow_depth", "good_form", "good_form"]
 REP_MILESTONE_COUNTS = {5, 10, 15, 20, 25, 30}
 
 # How many reps a feedback cue lingers before it can be overwritten by good-form
-FEEDBACK_LINGER_REPS = 6
+FEEDBACK_LINGER_REPS = 2
 
 
 def classify_fault(state: dict, data: dict) -> str:
@@ -101,25 +101,29 @@ def classify_fault(state: dict, data: dict) -> str:
 
 def run_audit(snapshot_path, exercise_name, fault_type, phase, angle, state_ref):
     """Runs RAGCoach audit in a background thread."""
-    result = vlm_auditor(
-        image_path=snapshot_path,
-        exercise_name=exercise_name,
-        fault_type=fault_type,
-        phase=phase,
-        angle=angle,
-    )
-    # Only overwrite feedback if the LLM returned something (not suppressed by session memory)
-    if result["feedback"] is not None:
-        state_ref["vlm_feedback"] = result["feedback"]
-        state_ref["feedback_set_reps"] = state_ref.get("reps", 0)
-    state_ref["audit_in_progress"] = False
+    try:
+        result = vlm_auditor(
+            image_path=snapshot_path,
+            exercise_name=exercise_name,
+            fault_type=fault_type,
+            phase=phase,
+            angle=angle,
+        )
+        # Only overwrite feedback if the LLM returned something (not suppressed by session memory)
+        if result["feedback"]:
+            state_ref["vlm_feedback"] = result["feedback"]
+            state_ref["feedback_set_reps"] = state_ref.get("reps", 0)
+    except Exception as e:
+        print(f"[Audit] Error: {e}")
+    finally:
+        state_ref["audit_in_progress"] = False
 
 
 def main():
     tracker = PoseTracker()
     exercise_name = "squats"
     state = make_initial_state()
-    state["feedback_set_reps"] = 0
+    state["feedback_set_reps"] = -FEEDBACK_LINGER_REPS  # allows first cue at rep 3
     good_rep_counter = 0
     stretch_fault_idx = 0
 
@@ -170,7 +174,7 @@ def main():
             if new_exercise != exercise_name:
                 exercise_name = new_exercise
                 state = make_initial_state()
-                state["feedback_set_reps"] = 0
+                state["feedback_set_reps"] = -FEEDBACK_LINGER_REPS
                 # Context-aware initial phase
                 if "jacks" in exercise_name:
                     state["phase"] = "closed"
@@ -189,7 +193,7 @@ def main():
             if detected != exercise_name:
                 exercise_name = detected
                 state = make_initial_state()
-                state["feedback_set_reps"] = 0
+                state["feedback_set_reps"] = -FEEDBACK_LINGER_REPS
                 if "jacks" in exercise_name:
                     state["phase"] = "closed"
                 elif any(x in exercise_name for x in ["high_knees", "butt", "quick", "kicks", "standing"]):
@@ -288,8 +292,7 @@ def main():
                 fault_type = classify_fault(state, data)
                 angle_val  = data.get("angle", 0.0)
 
-                # Immediately clear old feedback so bad-form cue replaces it the moment it arrives
-                state["vlm_feedback"] = ""
+                # Keep old feedback visible while LLM processes — new cue replaces it on arrival
                 state["feedback_set_reps"] = state["reps"]
 
                 state["audit_in_progress"] = True
