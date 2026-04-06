@@ -9,6 +9,13 @@ from tracker import PoseTracker
 from update_coach_logic import update_coach_logic, make_initial_state
 from auditor import vlm_auditor, _get_coach
 
+# Auto-detection (optional — only active after model is trained)
+try:
+    from exercise_detector import ExerciseDetector
+    _DETECTOR_AVAILABLE = True
+except ImportError:
+    _DETECTOR_AVAILABLE = False
+
 # ---------------------------------------------------------------------------
 # All 23 Table 5 exercises mapped to keyboard keys
 # ---------------------------------------------------------------------------
@@ -60,6 +67,15 @@ ANGLE_THRESHOLDS = {
 # Exercises where timer is shown instead of rep count
 STRETCH_EXERCISES = {"deltoid_stretch", "quad_stretch", "shoulder_gators", "toe_touchers"}
 
+# Stretch exercises rotate through these fault types (timer-based, no fault detection)
+STRETCH_FAULT_ROTATION = ["shallow_depth", "good_form", "good_form"]
+
+# Rep counts that trigger a milestone acknowledgment
+REP_MILESTONE_COUNTS = {5, 10, 15, 20, 25, 30}
+
+# How many reps a feedback cue lingers before it can be overwritten by good-form
+FEEDBACK_LINGER_REPS = 6
+
 
 def classify_fault(state: dict, data: dict) -> str:
     """Determines the fault type for RAG retrieval based on current state and data."""
@@ -92,7 +108,10 @@ def run_audit(snapshot_path, exercise_name, fault_type, phase, angle, state_ref)
         phase=phase,
         angle=angle,
     )
-    state_ref["vlm_feedback"] = result["feedback"]
+    # Only overwrite feedback if the LLM returned something (not suppressed by session memory)
+    if result["feedback"] is not None:
+        state_ref["vlm_feedback"] = result["feedback"]
+        state_ref["feedback_set_reps"] = state_ref.get("reps", 0)
     state_ref["audit_in_progress"] = False
 
 
@@ -100,7 +119,18 @@ def main():
     tracker = PoseTracker()
     exercise_name = "squats"
     state = make_initial_state()
+    state["feedback_set_reps"] = 0
     good_rep_counter = 0
+    stretch_fault_idx = 0
+
+    # Auto-detection setup
+    auto_detect = False
+    detector = None
+    if _DETECTOR_AVAILABLE:
+        try:
+            detector = ExerciseDetector()
+        except FileNotFoundError:
+            print("[AutoDetect] No model found — run extract_pose_features.py then train_classifier.py")
 
     _get_coach()  # pre-warm RAGCoach so first audit fires immediately
 
@@ -130,11 +160,17 @@ def main():
         key = cv2.waitKey(1) & 0xFF
         if key == 27:  # ESC
             break
+        if key == ord('z') and detector is not None:
+            auto_detect = not auto_detect
+            if auto_detect:
+                detector.reset(exercise_name)
+            print(f"[AutoDetect] {'ON  — pose classifier active' if auto_detect else 'OFF — manual keyboard mode'}")
         if key in EXERCISE_MAP:
             new_exercise = EXERCISE_MAP[key]
             if new_exercise != exercise_name:
                 exercise_name = new_exercise
                 state = make_initial_state()
+                state["feedback_set_reps"] = 0
                 # Context-aware initial phase
                 if "jacks" in exercise_name:
                     state["phase"] = "closed"
@@ -142,7 +178,26 @@ def main():
                     state["phase"] = "low"
                 audit_cooldown = 0
                 good_rep_counter = 0
+                stretch_fault_idx = 0
+                if detector is not None:
+                    detector.reset(exercise_name)
                 print(f"[Switched] {exercise_name}")
+
+        # ── AUTO-DETECTION ───────────────────────────────────────────────────
+        if auto_detect and detector is not None:
+            detected = detector.update(frame)
+            if detected != exercise_name:
+                exercise_name = detected
+                state = make_initial_state()
+                state["feedback_set_reps"] = 0
+                if "jacks" in exercise_name:
+                    state["phase"] = "closed"
+                elif any(x in exercise_name for x in ["high_knees", "butt", "quick", "kicks", "standing"]):
+                    state["phase"] = "low"
+                audit_cooldown = 0
+                good_rep_counter = 0
+                stretch_fault_idx = 0
+                print(f"[AutoDetect] → {exercise_name}")
 
         cfg = tracker.get_exercise_config(exercise_name)
         logic_type = cfg["type"]
@@ -173,6 +228,8 @@ def main():
                 state["timer"] += 1 / 30
                 if state["timer"] >= 5.0 and not state["audit_in_progress"] and audit_cooldown == 0:
                     state["timer"] = 0.0
+                    fault_type = STRETCH_FAULT_ROTATION[stretch_fault_idx % len(STRETCH_FAULT_ROTATION)]
+                    stretch_fault_idx += 1
                     if not os.path.exists("audits"):
                         os.makedirs("audits")
                     snapshot_path = f"audits/audit_{int(time.time())}.jpg"
@@ -181,16 +238,33 @@ def main():
                     audit_cooldown = AUDIT_COOLDOWN_FRAMES
                     threading.Thread(
                         target=run_audit,
-                        args=(snapshot_path, exercise_name, "sagging_hips",
+                        args=(snapshot_path, exercise_name, fault_type,
                               state["phase"], 0.0, state),
                         daemon=True,
                     ).start()
 
-            # ── GOOD-FORM GATE (every 5 clean reps) ─────────────────────────
-            elif (good_rep_counter > 0 and good_rep_counter % 5 == 0
+            # ── REP MILESTONE (5, 10, 15, 20 … reps) ────────────────────────
+            elif (state["reps"] > prev_reps and state["reps"] in REP_MILESTONE_COUNTS
+                  and not state["audit_in_progress"] and audit_cooldown == 0):
+                if not os.path.exists("audits"):
+                    os.makedirs("audits")
+                snapshot_path = f"audits/audit_{int(time.time())}.jpg"
+                cv2.imwrite(snapshot_path, frame)
+                state["audit_in_progress"] = True
+                audit_cooldown = AUDIT_COOLDOWN_FRAMES
+                threading.Thread(
+                    target=run_audit,
+                    args=(snapshot_path, exercise_name, "rep_milestone",
+                          state["phase"], data.get("angle", 0.0), state),
+                    daemon=True,
+                ).start()
+
+            # ── GOOD-FORM GATE (every 3 clean reps, respects linger window) ──
+            elif (good_rep_counter > 0 and good_rep_counter % 3 == 0
                   and not state["is_anomaly"]
                   and not state["audit_in_progress"]
-                  and audit_cooldown == 0):
+                  and audit_cooldown == 0
+                  and state["reps"] - state.get("feedback_set_reps", 0) >= FEEDBACK_LINGER_REPS):
                 if not os.path.exists("audits"):
                     os.makedirs("audits")
                 snapshot_path = f"audits/audit_{int(time.time())}.jpg"
@@ -214,6 +288,10 @@ def main():
                 fault_type = classify_fault(state, data)
                 angle_val  = data.get("angle", 0.0)
 
+                # Immediately clear old feedback so bad-form cue replaces it the moment it arrives
+                state["vlm_feedback"] = ""
+                state["feedback_set_reps"] = state["reps"]
+
                 state["audit_in_progress"] = True
                 audit_cooldown = AUDIT_COOLDOWN_FRAMES
                 state["is_anomaly"] = False
@@ -229,51 +307,60 @@ def main():
             # ── VISUAL OVERLAYS ──────────────────────────────────────────────
             fh, fw, _ = frame.shape
 
-            # Header bar (dynamic width)
-            cv2.rectangle(frame, (0, 0), (fw, 45), (0, 0, 0), -1)
-            cv2.putText(frame, "Q-T: Warmup | 1-P: Main | A-F: Cooldown | ESC: Quit",
-                        (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+            # ── Header bar ───────────────────────────────────────────────────
+            cv2.rectangle(frame, (0, 0), (fw, 50), (20, 20, 20), -1)
+            mode_tag = "AUTO" if auto_detect else "MANUAL"
+            header   = f"[{mode_tag}] Q-T: Warmup | 1-P: Main | A-F: Cooldown | Z: AutoDetect | ESC: Quit"
+            cv2.putText(frame, header,
+                        (10, 33), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (220, 220, 220), 1)
 
-            # Exercise name
-            cv2.putText(frame, f"MODE: {exercise_name.upper()}", (20, 80),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
+            # ── Exercise name ────────────────────────────────────────────────
+            cv2.putText(frame, f"MODE: {exercise_name.upper()}", (20, 90),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 255), 2)
 
-            # Reps or hold timer
+            # ── Reps or hold timer ───────────────────────────────────────────
             if is_stretch:
-                cv2.putText(frame, f"HOLD: {int(state['timer'])}s", (20, 120),
-                            cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 255), 2)
+                cv2.putText(frame, f"HOLD: {int(state['timer'])}s", (20, 145),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1.6, (0, 220, 255), 3)
             else:
-                cv2.putText(frame, f"REPS: {state['reps']}", (20, 120),
-                            cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 255), 2)
+                cv2.putText(frame, f"REPS: {state['reps']}", (20, 145),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1.6, (255, 255, 255), 3)
 
-            # Coach feedback — wrap at 45 chars across two lines
-            coach_color = (0, 165, 255) if state["audit_in_progress"] else (0, 255, 0)
-            feedback = state["vlm_feedback"]
-            line1 = ("COACH: " + feedback)[:50]
-            line2 = ("COACH: " + feedback)[50:95] if len("COACH: " + feedback) > 50 else ""
-            cv2.putText(frame, line1, (20, 160), cv2.FONT_HERSHEY_SIMPLEX, 0.6, coach_color, 2)
-            if line2:
-                cv2.putText(frame, line2, (20, 190), cv2.FONT_HERSHEY_SIMPLEX, 0.6, coach_color, 2)
+            # ── Coach feedback — dark bg for readability ─────────────────────
+            feedback = state.get("vlm_feedback") or ""
+            if feedback:
+                full_text  = "COACH: " + feedback
+                line1      = full_text[:52]
+                line2      = full_text[52:100] if len(full_text) > 52 else ""
+                box_bottom = 245 if line2 else 215
+                overlay    = frame.copy()
+                cv2.rectangle(overlay, (10, 158), (fw - 10, box_bottom), (0, 0, 0), -1)
+                cv2.addWeighted(overlay, 0.55, frame, 0.45, 0, frame)
+                coach_color = (0, 200, 255) if state["audit_in_progress"] else (100, 255, 100)
+                cv2.putText(frame, line1, (18, 192),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.75, coach_color, 2)
+                if line2:
+                    cv2.putText(frame, line2, (18, 230),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.75, coach_color, 2)
 
-            # Angle + joint dots (bilateral — one dot per visible side)
+            # ── Angle + joint dots ───────────────────────────────────────────
             if logic_type == "angle" and "all_knee_coords" in data:
                 for coords in data["all_knee_coords"]:
                     cx = int(coords[0] * fw)
                     cy = int(coords[1] * fh)
-                    cv2.circle(frame, (cx, cy), 10, (0, 255, 0), -1)
-                # Angle label on first dot
+                    cv2.circle(frame, (cx, cy), 12, (0, 255, 100), -1)
                 cx0 = int(data["all_knee_coords"][0][0] * fw)
                 cy0 = int(data["all_knee_coords"][0][1] * fh)
-                cv2.putText(frame, str(int(data["angle"])), (cx0 + 10, cy0 - 10),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+                cv2.putText(frame, str(int(data["angle"])), (cx0 + 12, cy0 - 12),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 2)
 
-            # Landmark dots for spatial/height exercises (cyan)
+            # ── Landmark dots for spatial/height exercises ───────────────────
             elif "landmark_coords" in data:
                 for coords in data["landmark_coords"]:
                     if coords is not None:
                         cx = int(coords[0] * fw)
                         cy = int(coords[1] * fh)
-                        cv2.circle(frame, (cx, cy), 8, (0, 255, 255), -1)
+                        cv2.circle(frame, (cx, cy), 10, (0, 255, 255), -1)
 
         cv2.imshow("Agentic Fitness Coach", frame)
 

@@ -94,10 +94,29 @@ KNOWLEDGE_BASE = [
     # ── COOL-DOWN STRETCHES ─────────────────────────────────────────────────
     "Deltoid stretch: Pull your arm across your chest until you feel the shoulder stretch.",
     "Deltoid stretch depth: Pull your arm deeper across your chest until you feel a full shoulder stretch.",
+    "Deltoid stretch hold: Keep the arm straight across, don't bend at the elbow.",
+    "Deltoid stretch breathe: Hold that position and breathe into the stretch.",
+    "Deltoid stretch good: Good hold — feel the back of the shoulder opening up.",
     "Quad stretch: Pull your heel to your glute, stand tall and squeeze the standing glute.",
     "Quad stretch depth: Pull your heel deeper toward your glute for a full quadriceps stretch.",
+    "Quad stretch balance: Fix your gaze on a point in front of you to stay steady.",
+    "Quad stretch technique: Stand tall, pull the heel to glute, keep your knees together.",
+    "Quad stretch good: Hold it steady — feel that stretch through the front of the thigh.",
     "Shoulder gators: Keep the movement slow and controlled, feel the full range.",
+    "Shoulder gators control: Slow is better here — feel the shoulder opening with each rotation.",
+    "Shoulder gators range: Try to reach full extension on each arm swing.",
+    "Shoulder gators good: Great range — keep it smooth and controlled.",
     "Toe touchers: Hinge from the hips with a soft knee bend, reach toward the floor.",
+    "Toe touchers hinge: Lead with your hips back, not your back rounding forward.",
+    "Toe touchers good: Great reach — keep it smooth and controlled on the way back up.",
+
+    # ── REP MILESTONES ───────────────────────────────────────────────────────
+    "5 reps! Great work, keep the rhythm going.",
+    "10 reps! Stay consistent, you have got this.",
+    "15 reps! Keep building — maintain that form.",
+    "20 reps! Strong effort, don't let the form slip now.",
+    "Great pace — keep building those reps.",
+    "Strong rep count — stay focused and keep going.",
 
     # ── GENERAL POSITIVES / UNIVERSAL CUES ─────────────────────────────────
     "Great rep, maintain that range of motion every single time.",
@@ -239,14 +258,15 @@ FAULT_QUERIES = {
     },
     # Fallback for any exercise not explicitly listed above
     "_generic": {
-        "shallow_depth": "incomplete range of motion exercise correction cue",
-        "rounded_back":  "back rounding neutral spine posture correction",
-        "sagging_hips":  "hips dropping core engagement correction",
-        "low_drive":     "not reaching target height or distance correction",
-        "asymmetry":     "left right asymmetry exercise correction cue",
-        "stuck":         "stuck unable to complete movement correction",
-        "landing":       "landing too hard soft knees absorb impact",
-        "good_form":     "positive reinforcement good form encouragement",
+        "shallow_depth":  "incomplete range of motion exercise correction cue",
+        "rounded_back":   "back rounding neutral spine posture correction",
+        "sagging_hips":   "hips dropping core engagement correction",
+        "low_drive":      "not reaching target height or distance correction",
+        "asymmetry":      "left right asymmetry exercise correction cue",
+        "stuck":          "stuck unable to complete movement correction",
+        "landing":        "landing too hard soft knees absorb impact",
+        "good_form":      "positive reinforcement good form encouragement",
+        "rep_milestone":  "rep count milestone acknowledgment keep going encouragement",
     },
 }
 

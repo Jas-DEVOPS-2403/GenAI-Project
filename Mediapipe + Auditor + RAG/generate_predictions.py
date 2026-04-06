@@ -55,6 +55,12 @@ STRETCH_EXERCISES = {"deltoid_stretch", "quad_stretch", "shoulder_gators", "toe_
 
 AUDIT_COOLDOWN_FRAMES = 90  # ~3s at 30fps
 
+# Stretch exercises rotate through these fault types (no fault detection, timer-based)
+STRETCH_FAULT_ROTATION = ["shallow_depth", "good_form", "good_form"]
+
+# Rep counts that trigger a milestone acknowledgment (matches GT coach pattern)
+REP_MILESTONE_COUNTS = {5, 10, 15, 20, 25, 30}
+
 
 def normalize_exercise_name(name: str) -> str:
     name = name.lower().strip()
@@ -111,6 +117,7 @@ def process_segment(segment, tracker) -> tuple[list[str], list[float]]:
     audit_cooldown = 0
     good_rep_counter = 0
     stretch_timer = 0.0
+    stretch_fault_idx = 0
 
     for frame_idx in range(start_frame, min(end_frame, total_frames)):
         ret, frame = cap.read()
@@ -146,7 +153,10 @@ def process_segment(segment, tracker) -> tuple[list[str], list[float]]:
             stretch_timer += 1 / 30
             if stretch_timer >= 5.0 and audit_cooldown == 0:
                 stretch_timer = 0.0
-                fault_type = "sagging_hips"
+                fault_type = STRETCH_FAULT_ROTATION[stretch_fault_idx % len(STRETCH_FAULT_ROTATION)]
+                stretch_fault_idx += 1
+        elif state["reps"] > prev_reps and state["reps"] in REP_MILESTONE_COUNTS and audit_cooldown == 0:
+            fault_type = "rep_milestone"
         elif (good_rep_counter > 0 and good_rep_counter % 5 == 0
               and not state["is_anomaly"] and audit_cooldown == 0):
             fault_type = "good_form"
