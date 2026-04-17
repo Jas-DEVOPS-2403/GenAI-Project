@@ -1,24 +1,50 @@
 # RAG Agentic Fitness Coach
 
-A real-time squat coaching system that runs entirely on your local machine. No cloud, no API keys, no internet connection required during use.
+I built a real-time fitness coaching system that runs entirely on a local machine — no cloud, no API keys, no internet required. A webcam watches you exercise, MediaPipe tracks your joint angles at ~30fps, and when it detects a form fault, an agentic RAG pipeline fires: FAISS retrieves the three most relevant expert coaching cues, and a local LLM generates a short on-screen cue in real time.
 
-MediaPipe tracks your knee angle through a webcam at ~30fps. When you appear stuck or show a form fault, an agentic pipeline fires: FAISS retrieves relevant coaching cues from a local knowledge base, and a local LLM generates a short coaching cue that appears on screen in real time.
+> **Demo coming soon** — screen recording of the coach firing mid-squat will go here.
+
+---
+
+## Results
+
+I evaluated the system against 398 video segments with ground-truth coach transcripts:
+
+| Metric | Score | Notes |
+|---|---|---|
+| BERTScore | **0.859** | Semantic similarity — when it fires, what it says is correct |
+| Precision@3 | 0.640 | 64% of retrieved cues are directly relevant |
+| Recall@3 | **1.000** | Every fault query surfaces at least one relevant cue |
+| F1@3 | 0.749 | Combined retrieval score |
+| METEOR | 0.072 | Low — paraphrase gap, not wrong answers |
+| ROUGE-L | 0.046 | Low — short outputs don't share surface form with GT |
+| Temporal F-score | 0.067 | Low — coverage gap for exercises without angle cycles |
+
+The core retrieval layer is essentially perfect (Recall@3 = 1.0). The coverage gap is the main open problem: exercises that don't produce a detectable joint angle cycle rarely trigger the audit gate.
+
+---
+
+## Architecture
+
+![Architecture diagram](Archi2.png)
+
+Two things happen in parallel. The knowledge base path encodes ~130 expert coaching cues into a FAISS in-memory index at startup. The live path takes the detected fault type and exercise name from MediaPipe, encodes them with the same model, and queries the index for the top 3 nearest cues. Those cues get handed to a local LLM which condenses them into a single short coaching line.
 
 ---
 
 ## How it works
 
-The system runs two loops simultaneously:
+I designed two loops running simultaneously:
 
-**Fast loop (every frame)** — MediaPipe reads your knee angle and updates your rep count and movement phase (`up` / `down`). This runs at full camera speed and never blocks.
+**Fast loop (every frame)** — MediaPipe reads the joint angle and updates the rep count and movement phase (`up` / `down`). This runs at full camera speed and never blocks.
 
-**Slow loop / agentic gate** — if you stay in the `down` phase below a threshold angle for ~1.5 seconds, the system classifies the fault, retrieves the 3 most relevant coaching cues from the FAISS index, and sends them as grounded context to the LLM. The LLM returns a single short cue which appears on screen.
+**Slow loop / agentic gate** — if the athlete stays in the `down` phase below a threshold angle for ~1.5 seconds, the RAGCoach classifies the fault, retrieves the 3 most relevant cues from the FAISS index, and sends them as grounded context to the LLM. The LLM returns a single cue which appears on screen.
 
-Session memory prevents the coach from repeating the same cue if you keep triggering the same fault — it gives you time to self-correct.
+Session memory handles repetition: if the same fault fires 3 consecutive times, the coach suppresses itself and gives the athlete time to self-correct rather than repeating the same advice.
 
 ```
 Webcam
-  └─ tracker.py          # MediaPipe — extracts knee angle
+  └─ tracker.py               # MediaPipe — extracts joint angle
        └─ update_coach_logic.py   # Rep counting + anomaly gate
             └─ auditor.py         # Fault classification + snapshot
                  └─ rag_coach.py  # FAISS retrieval + Ollama LLM
@@ -27,11 +53,21 @@ Webcam
 
 ---
 
+## Tech stack
+
+- **MediaPipe** — real-time pose estimation at ~30fps
+- **sentence-transformers** (`all-MiniLM-L6-v2`) — 384-dim semantic embeddings
+- **FAISS** (`IndexFlatL2`) — in-memory exact nearest-neighbour search
+- **Ollama** + `llama3.2:3b` — local LLM inference, no cloud
+- **OpenCV** — webcam capture and overlay rendering
+
+---
+
 ## Requirements
 
-- Python 3.10+
+- Python 3.10 or 3.11 (mediapipe 0.10.14 does not support 3.12+)
 - A webcam
-- [Ollama](https://ollama.com) installed and running
+- [Ollama](https://ollama.com) installed and running locally
 
 ---
 
@@ -49,11 +85,11 @@ ollama serve
 
 **3. Install Python dependencies**
 ```bash
-pip install faiss-cpu sentence-transformers ollama opencv-python
 pip install mediapipe==0.10.14
+pip install faiss-cpu sentence-transformers ollama opencv-python
 ```
 
-> ⚠️ Pin mediapipe to `0.10.14` — newer versions have breaking API changes.
+> Pin mediapipe to `0.10.14` — newer versions have breaking API changes.
 
 ---
 
@@ -63,14 +99,14 @@ pip install mediapipe==0.10.14
 ```bash
 python debug_rag.py
 ```
-Check that the cues printed for each fault type make sense. If they look wrong, edit `FAULT_QUERIES` in `rag_coach.py` before proceeding.
+Check that the cues printed for each fault type make sense. If they look off, edit `FAULT_QUERIES` in `rag_coach.py` before proceeding.
 
 **Run the full pipeline**
 ```bash
 python test_tracker.py
 ```
 
-Press `q` to quit.
+Press `q` to quit. Use keyboard shortcuts to switch exercises — see `EXERCISE_MAP` in `test_tracker.py`.
 
 ---
 
@@ -78,7 +114,7 @@ Press `q` to quit.
 
 On screen:
 - `Reps: N | Phase: up/down` — live rep counter and movement phase
-- `COACH: <cue>` — coaching feedback when a fault is detected
+- `COACH: <cue>` — coaching feedback when a fault is detected (green = settled, orange = LLM processing)
 
 In the console:
 ```
@@ -94,21 +130,23 @@ Snapshots of fault frames are saved to the `audits/` folder automatically.
 
 ---
 
-## Fault types
+## Fault classification
 
-The system classifies faults based on knee angle at the time the anomaly gate fires:
+The RAGCoach classifies faults based on joint angle at the time the anomaly gate fires:
 
 | Angle | Fault | Description |
 |---|---|---|
-| < 80° | `stuck` | Deep squat but can't drive up |
-| 80° – 110° | `shallow_depth` | Not reaching parallel |
+| < 80° | `stuck` | Deep position but can't drive up |
+| 80° – 110° | `shallow_depth` | Not reaching full depth |
 | ≥ 110° | `knee_valgus` | Potential up-phase form issue |
+
+Spatial and height-based exercises use different metrics (joint spread, knee height relative to hip) with their own fault types.
 
 ---
 
 ## Expanding the knowledge base
 
-You can add coaching cues at runtime without rebuilding the FAISS index:
+The RAGCoach exposes a method to add cues at runtime without rebuilding the FAISS index:
 
 ```python
 coach = auditor._get_coach()
@@ -129,28 +167,17 @@ coach.add_to_knowledge_base([
 ├── auditor.py             # Agentic bridge — fault classification, calls RAGCoach
 ├── rag_coach.py           # RAGCoach — FAISS index, retrieval, Ollama LLM
 ├── debug_rag.py           # Standalone retrieval + LLM sanity check
+├── eval/                  # Benchmark evaluation scripts and manifest
 ├── audits/                # Saved snapshots of fault frames (auto-created)
-├── CLAUDE.md              # Claude Code context file
 └── README.md              # This file
 ```
 
 ---
 
-## Current limitations
+## Known limitations
 
-- Tracks the left leg only (MediaPipe landmarks 23, 25, 27)
-- Fault classification uses angle only — true knee valgus detection requires 2D joint position analysis
+- Fault classification uses joint angle only — true knee valgus detection requires 2D joint position analysis
 - Knowledge base is hardcoded; no external dataset loaded by default
-- Session memory resets on every run
+- Session memory resets on every run (not persisted to disk)
+- Exercises without a detectable angle cycle (e.g. some stretches) rarely trigger the audit gate — this is the main driver of the low temporal F-score
 - Coaching is visual only — no audio output
-
----
-
-## Roadmap
-
-- [ ] Right leg tracking + bilateral comparison
-- [ ] Load coaching cues from an external dataset at startup
-- [ ] VLM upgrade — `auditor.py` already saves snapshots and passes `image_path` through; swap in a vision model call
-- [ ] Audio feedback via text-to-speech
-- [ ] Support for additional exercises (deadlift, lunge, hip hinge)
-- [ ] Persistent session memory across runs
