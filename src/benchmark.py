@@ -9,11 +9,19 @@
 #                  (did we surface anything useful at all?)
 #   F1@k         = 2 × (Precision × Recall) / (Precision + Recall)
 #
-# Run from: Mediapipe + Auditor + RAG/
+# Run from: src/
 #   python benchmark.py        # k=3 (default)
 #   python benchmark.py 5      # k=5
 
 import sys
+
+# The report uses box-drawing characters and the knowledge base contains
+# en/em dashes. A Windows console defaults to cp1252 and raises
+# UnicodeEncodeError on both, which previously killed the run just before the
+# macro-average summary printed.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 from rag_coach import RAGCoach, FAULT_QUERIES
 
 # ---------------------------------------------------------------------------

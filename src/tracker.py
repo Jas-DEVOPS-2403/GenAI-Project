@@ -134,7 +134,7 @@ class PoseTracker:
                 "label": config["label"],
             }
 
-        # 4. VLM ONLY (isometric holds — no metric, time-driven from test_tracker)
+        # 4. VLM ONLY (isometric holds — no metric, time-driven from live_coach)
         elif config["type"] == "vlm_only":
             return {"label": config["label"], "status": "holding"}
 

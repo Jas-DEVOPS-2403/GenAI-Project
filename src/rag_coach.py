@@ -131,7 +131,7 @@ KNOWLEDGE_BASE = [
 
 # ---------------------------------------------------------------------------
 # Fault queries — nested by exercise, with a _generic fallback
-# Keys must match exercise_name values used in test_tracker.py (snake_case)
+# Keys must match exercise_name values used in live_coach.py (snake_case)
 # ---------------------------------------------------------------------------
 FAULT_QUERIES = {
     "squats": {

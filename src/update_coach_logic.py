@@ -134,6 +134,6 @@ def update_coach_logic(state: CoachState, data: Dict[str, Any], exercise_name: s
             state["cooldown_frames"] -= 1
 
     # ── VLM_ONLY / ISOMETRIC (plank, stretches — time-driven, no rep counting) ─
-    # No state changes here; audit timing is managed by test_tracker.py
+    # No state changes here; audit timing is managed by live_coach.py
 
     return state

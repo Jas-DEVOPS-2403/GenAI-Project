@@ -26,7 +26,7 @@ Webcam → tracker.py (MediaPipe)
               ↓ fault_type, phase, angle
          rag_coach.py (RAGCoach — FAISS retrieval + Ollama LLM)
               ↓ feedback string (or None if suppressed)
-         test_tracker.py (overlay on screen)
+         live_coach.py (overlay on screen)
 ```
 
 **Two loops:**
@@ -43,7 +43,7 @@ Webcam → tracker.py (MediaPipe)
 | `update_coach_logic.py` | Pure state machine — rep counting + anomaly detection, no I/O |
 | `auditor.py` | Agentic bridge — classifies fault from angle, calls RAGCoach, saves snapshot |
 | `rag_coach.py` | `RAGCoach` — FAISS index, sentence encoder, session memory, Ollama call |
-| `test_tracker.py` | Entry point — wires all modules, renders OpenCV overlay |
+| `live_coach.py` | Entry point — wires all modules, renders OpenCV overlay |
 
 ---
 
@@ -88,7 +88,7 @@ pip install faiss-cpu sentence-transformers ollama opencv-python
 pip install mediapipe==0.10.14   # pin this — newer versions have breaking changes
 
 # Ollama
-ollama serve          # must be running before test_tracker.py
+ollama serve          # must be running before live_coach.py
 ollama pull llama3.2:3b
 ```
 
@@ -101,11 +101,11 @@ ollama pull llama3.2:3b
 python debug_rag.py
 
 # Step 2 — verify pose tracking only (no coach)
-# Use the simple test_tracker.py (no auditor import)
-python test_tracker.py
+# Use the simple live_coach.py (no auditor import)
+python live_coach.py
 
 # Step 3 — full pipeline
-python test_tracker.py   # full version with auditor import
+python live_coach.py   # full version with auditor import
 ```
 
 **Expected console output (full pipeline):**
@@ -151,7 +151,7 @@ REPS: 1
 
 **Add more coaching cues from a dataset:**
 ```python
-# At startup in test_tracker.py, after RAGCoach is initialised:
+# At startup in live_coach.py, after RAGCoach is initialised:
 coach = auditor._get_coach()
 coach.add_to_knowledge_base(["cue from dataset", "another cue"])
 ```
@@ -195,4 +195,4 @@ coach.add_to_knowledge_base(["cue from dataset", "another cue"])
 - [ ] Generalised state machine in `update_coach_logic.py` (angle + spatial + height branches)
 - [ ] Exercise-aware `FAULT_QUERIES` and `KNOWLEDGE_BASE` in `rag_coach.py`
 - [ ] `exercise_name` passed through `auditor.py` → `RAGCoach.get_feedback()`
-- [ ] Full `test_tracker.py` with `EXERCISE_MAP` keyboard switching
+- [ ] Full `live_coach.py` with `EXERCISE_MAP` keyboard switching

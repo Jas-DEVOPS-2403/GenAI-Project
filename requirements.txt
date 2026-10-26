@@ -1,0 +1,21 @@
+# RAG Agentic Fitness Coach — Python 3.10 or 3.11 only.
+#
+# mediapipe is pinned hard: the legacy `mp.solutions` API this project is
+# built on was removed in later 0.10.x releases, so anything newer fails at
+# import with `module 'mediapipe' has no attribute 'solutions'`.
+# mediapipe 0.10.14 also has no wheels for Python 3.12+.
+mediapipe==0.10.14
+
+# Pose extraction + webcam capture and overlay rendering.
+opencv-python>=4.8,<5
+
+# numpy <2 — mediapipe 0.10.14 is built against the 1.x ABI.
+numpy>=1.24,<2
+
+# Retrieval layer: 384-dim embeddings + exact in-memory nearest neighbour.
+sentence-transformers>=2.2,<3
+faiss-cpu>=1.7,<2
+
+# Local LLM inference. Needs the Ollama server running separately
+# (`ollama serve`) with llama3.2:3b pulled.
+ollama>=0.1.7

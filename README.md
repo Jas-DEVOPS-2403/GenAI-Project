@@ -22,6 +22,19 @@ I evaluated the system against 398 video segments with ground-truth coach transc
 
 The core retrieval layer is essentially perfect (Recall@3 = 1.0). The coverage gap is the main open problem: exercises that don't produce a detectable joint angle cycle rarely trigger the audit gate.
 
+The three retrieval rows are reproducible on any machine in about a minute — no
+webcam, no LLM, no dataset:
+
+```bash
+cd src && python benchmark.py
+#   76 exercise/fault pairs evaluated at k=3
+#   Precision@3: 0.640  |  Recall@3: 1.000  |  F1@3: 0.749
+```
+
+The generation and temporal rows (BERTScore, METEOR, ROUGE-L, temporal
+F-score) come from the 398-segment video evaluation, which needs the
+non-redistributable dataset — see the note under Project structure.
+
 ---
 
 ## Architecture
@@ -85,28 +98,42 @@ ollama serve
 
 **3. Install Python dependencies**
 ```bash
-pip install mediapipe==0.10.14
-pip install faiss-cpu sentence-transformers ollama opencv-python
+pip install -r requirements.txt
 ```
 
-> Pin mediapipe to `0.10.14` — newer versions have breaking API changes.
+> The mediapipe pin in `requirements.txt` is not optional. This project is built
+> on the legacy `mp.solutions` API, which was **removed** in later 0.10.x
+> releases — on mediapipe 0.10.33 the tracker dies immediately with
+> `module 'mediapipe' has no attribute 'solutions'`. Use a virtualenv so the
+> pin doesn't fight whatever else you have installed.
 
 ---
 
 ## Running
 
+All scripts expect to be run from inside `src/` — the modules import each other
+flat (e.g. `from tracker import PoseTracker`).
+
 **Verify retrieval is working first (no webcam needed)**
 ```bash
+cd src
 python debug_rag.py
 ```
 Check that the cues printed for each fault type make sense. If they look off, edit `FAULT_QUERIES` in `rag_coach.py` before proceeding.
 
-**Run the full pipeline**
+**Score the retrieval layer** — no webcam and no LLM needed. This is what
+produces the Precision/Recall/F1@3 figures in the Results table:
 ```bash
-python test_tracker.py
+python benchmark.py        # k=3 (default)
+python benchmark.py 5      # k=5
 ```
 
-Press `q` to quit. Use keyboard shortcuts to switch exercises — see `EXERCISE_MAP` in `test_tracker.py`.
+**Run the full pipeline**
+```bash
+python live_coach.py
+```
+
+Press `q` to quit. Use keyboard shortcuts to switch exercises — see `EXERCISE_MAP` in `live_coach.py`.
 
 ---
 
@@ -161,16 +188,30 @@ coach.add_to_knowledge_base([
 ## Project structure
 
 ```
-├── test_tracker.py        # Entry point — wires all modules, renders overlay
-├── tracker.py             # PoseTracker — MediaPipe pose extraction
-├── update_coach_logic.py  # State machine — rep counting + anomaly gate
-├── auditor.py             # Agentic bridge — fault classification, calls RAGCoach
-├── rag_coach.py           # RAGCoach — FAISS index, retrieval, Ollama LLM
-├── debug_rag.py           # Standalone retrieval + LLM sanity check
-├── eval/                  # Benchmark evaluation scripts and manifest
-├── audits/                # Saved snapshots of fault frames (auto-created)
-└── README.md              # This file
+├── src/
+│   ├── live_coach.py          # Entry point — wires all modules, renders overlay
+│   ├── tracker.py             # PoseTracker — MediaPipe pose extraction
+│   ├── update_coach_logic.py  # State machine — rep counting + anomaly gate
+│   ├── auditor.py             # Agentic bridge — fault classification, calls RAGCoach
+│   ├── rag_coach.py           # RAGCoach — FAISS index, retrieval, Ollama LLM
+│   ├── debug_rag.py           # Standalone retrieval + LLM sanity check
+│   ├── benchmark.py           # Precision/Recall/F1@k over FAULT_QUERIES
+│   ├── retrieval_audit.py     # Dumps retrieved cues per query for inspection
+│   ├── generate_predictions.py  # Batch inference over a video manifest (see note)
+│   └── audits/                # Fault-frame snapshots, written at runtime (gitignored)
+├── requirements.txt
+├── Archi2.png                 # Architecture diagram
+└── README.md
 ```
+
+**Note on `generate_predictions.py`:** this is the batch harness that produced
+the BERTScore/METEOR/ROUGE-L and temporal figures above. It imports a `stage3`
+package (`stage3.manifest`, `stage3.predictions`) that held the video manifest
+loader and prediction serialiser for the evaluation dataset. That package is not
+in this repo — the dataset it indexes isn't redistributable — so the script is
+kept here for reference but will not run as-is. `benchmark.py` is the
+self-contained one: it needs nothing external and reproduces the retrieval
+metrics on its own.
 
 ---
 

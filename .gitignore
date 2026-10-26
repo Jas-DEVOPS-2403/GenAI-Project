@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# Fault-frame snapshots written at runtime by auditor.py
+audits/
+
+# Benchmark inputs/outputs (regenerate with src/generate_predictions.py)
+predictions.json
+benchmark_manifest.json
+
+.env
+.DS_Store
+.idea/
+.vscode/

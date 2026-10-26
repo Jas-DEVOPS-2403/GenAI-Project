@@ -106,7 +106,7 @@ def process_segment(segment, tracker) -> tuple[list[str], list[float]]:
     cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
 
     state = make_initial_state()
-    # Set correct initial phase (mirrors test_tracker.py exercise-switch logic)
+    # Set correct initial phase (mirrors live_coach.py exercise-switch logic)
     if "jacks" in tracker_name:
         state["phase"] = "closed"
     elif any(x in tracker_name for x in ["high_knees", "butt", "quick", "kicks", "standing"]):
